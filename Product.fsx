@@ -1,12 +1,12 @@
 #r "nuget: Deedle"
 #r "nuget: FSharp.Stats"
 // third party .net packages 
-//#r "nuget: Plotly.NET, 2.0.0-beta5"
+#r "nuget: Plotly.NET, 2.0.0-beta5"
 #r "nuget: FSharp.Data"
-
+#I "data"
 
 open System
-
+open Deedle
 
 /// DOMAIN
 
@@ -46,6 +46,7 @@ type Holding = {
 
 // Min Reset Interval
 let MIN_RESET_INTERVAL = TimeSpan(0,1,0)
+let [<Literal>] CSV_FILE = @"C:\\Users\\joffr\\source\\repos\\SmileResearch_Project_Interview_DataScienceEngineer_1\\data\btc-perp.csv"
 
 /// FUNCTIONS
 
@@ -81,6 +82,33 @@ let calcRealisedPnl (h: Holding) =
             
         (calcRealisedGamma h) + (float nbDaysStarted) * h.Product.ThetaD
 
+// 
+
+/// Data Analysis
+
+// Loading Data into a Deedle Frame
+let btcPerp = 
+    Frame.ReadCsv(CSV_FILE, hasHeaders=true, separators=";")
+    
+let seriesDT : Series<int, DateTimeOffset> =
+    btcPerp
+    |> Frame.getCol "UtcUnixTimeInMilliSeconds"
+    |> Series.map (fun _ x -> DateTimeOffset.FromUnixTimeMilliseconds(x))
+// Printing
+
+btcPerp.ReplaceColumn("UtcUnixTimeInMilliSeconds",seriesDT.Values)
+let newFrame = 
+    Frame.indexRowsDateOffs "UtcUnixTimeInMilliSeconds" btcPerp
+    |> Frame.sortRowsByKey
+btcPerp.Print()
+newFrame.Print()
+let closes = newFrame?Close
+let closesMidnight = closes |> Series.filter (fun k _ -> k.TimeOfDay = TimeSpan(0,0,0))
+
+
+// Charting Price
+
+
 //// TESTS
 // Test product creation
 let gammaD = 1825000.
@@ -104,3 +132,4 @@ let calcRGamma = calcRealisedGamma (initH.addResets(resets))
 let calcRPnl = calcRealisedPnl (initH.addResets(resets))
 DateTimeOffset.UtcNow.AddHours(33.)
 |> calcRPnl
+
