@@ -9,6 +9,9 @@
 open System
 open Deedle
 open Plotly.NET
+
+fsi.AddPrinter<DateTimeOffset>(fun dt -> dt.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss"))
+
 /// DOMAIN
 
 type ProductDetails = {
@@ -26,7 +29,7 @@ type Reset = {
     ResetIndex: float
 }
 
-type Resets = List<Reset>
+//type Resets = List<Reset>
 
 type ResetsTS = Series<DateTimeOffset, float>
 
@@ -83,6 +86,12 @@ let [<Literal>] CSV_FILE = @"C:\\Users\\joffr\\source\\repos\\SmileResearch_Proj
 /// FUNCTIONS
 
 // Create a standardized (midnight reset) product
+
+let a = 2
+let check = a = 3
+
+
+
 let createProduct (startD: DateTimeOffset) (nb: int) (gammaD: float) (thetaD: float) =
     let startMidnight = startD.Subtract(startD.TimeOfDay)
     
@@ -94,6 +103,17 @@ let createProduct (startD: DateTimeOffset) (nb: int) (gammaD: float) (thetaD: fl
         GammaD = gammaD
         ThetaD = thetaD
     }
+
+let l = [1.;2.;3.;4.;5.]
+let lpw =
+    l
+    |> List.pairwise
+    |> List.map (fun (x,y) -> pown (((y - x) / x)) 2)
+    |> List.sum
+
+
+let calcRG (h: Holding) =
+    h.Resets
 
 
 // Calc Realised Gamma PnL
@@ -108,12 +128,12 @@ let calcRealisedGamma (h: Holding) =
 let calcRealisedPnl (h: Holding) =
     fun (dt: DateTimeOffset) ->
         let nbDaysStarted = 
-            if dt >= h.Product.EndDate then h.Product.NbOfDays
+            if dt >= h.Product.EndDate then h.Product.NbOfDays |> float
             else
                 Math.Floor(dt.Subtract(h.Product.StartDate).TotalDays + 1.)
-                |> int
+                
             
-        (calcRealisedGamma h) + (float nbDaysStarted) * h.Product.ThetaD
+        (calcRealisedGamma h) + nbDaysStarted * h.Product.ThetaD
 
 // 
 
@@ -137,6 +157,8 @@ btcPerp.Print()
 newFrame.Print()
 let closes = newFrame?Close
 let closesMidnight = closes |> Series.filter (fun k _ -> k.TimeOfDay = TimeSpan(0,0,0))
+
+
 
 let getStartingDatesPossible (length: int)=
     let lastDt =
@@ -171,21 +193,33 @@ let initH = Holding.Create(product1, 50000.)
 let calcRGamma = calcRealisedGamma (initH.AddResets(resets))
 
 let calcRPnl = calcRealisedPnl (initH.AddResets(resets))
-DateTimeOffset.UtcNow.AddHours(33.)
+DateTimeOffset.UtcNow.AddHours(100.)
 |> calcRPnl
 
-/// 
+/// DEFINE ALL POTENTIAL PRODUCTS
+    /// 
 let allPossibleProduct =
     getStartingDatesPossible 30
     |> Seq.toList
     |> List.map (fun x -> createProduct x 30 gammaD thetaD)
     |> List.map (fun x -> Holding.Create(x, closesMidnight |> Series.get(x.StartDate)))
 
+
+
+
+let (aa,b) = 2,3
+let xx = 3,4
+
+
 let simpleEodReset =
     allPossibleProduct
     |> List.map (fun x -> x.AddResets(closesMidnight))
     |> List.map (fun x -> x.Product.StartDate, calcRealisedPnl x x.Product.EndDate)
     |> series
+
+
+
+
 let avg, median = simpleEodReset |> Stats.mean, simpleEodReset |> Stats.median
 let seriesToSeq (x:Series<DateTimeOffset,float>)=
     Seq.zip (x.Keys |> Seq.map (fun x -> x.UtcDateTime)) x.Values
